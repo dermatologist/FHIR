@@ -22,6 +22,7 @@ import java.time.ZonedDateTime;
 import java.time.temporal.TemporalAccessor;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -85,12 +86,15 @@ import com.ibm.fhir.server.util.RestAuditLogger;
 @Produces({ FHIRMediaType.APPLICATION_FHIR_JSON, MediaType.APPLICATION_JSON, FHIRMediaType.APPLICATION_FHIR_XML,
         MediaType.APPLICATION_XML })
 public class Capabilities extends FHIRResource {
+
     private static final Logger log = java.util.logging.Logger.getLogger(Capabilities.class.getName());
 
     // Constants
     private static final String FHIR_SERVER_NAME = "IBM FHIR Server";
     private static final String FHIR_COPYRIGHT = "(C) Copyright IBM Corporation 2016, 2020";
     private static final String EXTENSION_URL = "http://ibm.com/fhir/extension";
+    private static final String BASE_CAPABILITY_URL = "http://hl7.org/fhir/CapabilityStatement/base";
+    private static final String BASE_2_CAPABILITY_URL = "http://hl7.org/fhir/CapabilityStatement/base2";
 
     // Error Messages
     private static final String ERROR_MSG = "Caught exception while processing 'metadata' request.";
@@ -119,7 +123,8 @@ public class Capabilities extends FHIRResource {
             // Defaults to 60 minutes (or what's in the fhirConfig)
             int cacheLength = fhirConfig.getIntProperty(PROPERTY_CAPABILITY_STATEMENT_CACHE, 60);
 
-            CapabilityStatement capabilityStatement = CAPABILITY_STATEMENT_CACHE_PER_TENANT.compute(tenantId, (k,v) -> getOrCreateCapabilityStatement(v, cacheLength));
+            CapabilityStatement capabilityStatement =
+                    CAPABILITY_STATEMENT_CACHE_PER_TENANT.compute(tenantId, (k, v) -> getOrCreateCapabilityStatement(v, cacheLength));
             RestAuditLogger.logMetadata(httpServletRequest, startTime, new Date(), Response.Status.OK);
 
             CacheControl cacheControl = new CacheControl();
@@ -181,7 +186,6 @@ public class Capabilities extends FHIRResource {
         interactions.add(buildInteractionStatement(TypeRestfulInteraction.SEARCH_TYPE));
         interactions.add(buildInteractionStatement(TypeRestfulInteraction.PATCH));
 
-
         // Build the lists of operations that are supported
         List<OperationDefinition> systemOps = new ArrayList<>();
         Map<ResourceType.ValueSet, List<OperationDefinition>> typeOps = new HashMap<>();
@@ -218,9 +222,7 @@ public class Capabilities extends FHIRResource {
             if (searchParameters != null) {
                 for (SearchParameter searchParameter : searchParameters) {
                     Rest.Resource.SearchParam.Builder conformanceSearchParamBuilder =
-                            Rest.Resource.SearchParam.builder()
-                                .name(searchParameter.getCode())
-                                .type(searchParameter.getType());
+                            Rest.Resource.SearchParam.builder().name(searchParameter.getCode()).type(searchParameter.getType());
                     if (searchParameter.getDescription() != null) {
                         conformanceSearchParamBuilder.documentation(searchParameter.getDescription());
                     }
@@ -240,18 +242,8 @@ public class Capabilities extends FHIRResource {
             }
 
             // Build the ConformanceResource for this resource type.
-            Rest.Resource cr = Rest.Resource.builder()
-                    .type(ResourceType.of(resourceType))
-                    .profile(Canonical.of("http://hl7.org/fhir/profiles/" + resourceTypeName))
-                    .interaction(interactions)
-                    .operation(ops)
-                    .conditionalCreate(com.ibm.fhir.model.type.Boolean.TRUE)
-                    .conditionalUpdate(com.ibm.fhir.model.type.Boolean.TRUE)
-                    .updateCreate(isUpdateCreate)
-                    .conditionalDelete(ConditionalDeleteStatus.MULTIPLE)
-                    .conditionalRead(ConditionalReadStatus.FULL_SUPPORT)
-                    .searchParam(conformanceSearchParams)
-                    .build();
+            Rest.Resource cr = Rest.Resource.builder().type(ResourceType.of(resourceType)).profile(Canonical.of("http://hl7.org/fhir/profiles/"
+                    + resourceTypeName)).interaction(interactions).operation(ops).conditionalCreate(com.ibm.fhir.model.type.Boolean.TRUE).conditionalUpdate(com.ibm.fhir.model.type.Boolean.TRUE).updateCreate(isUpdateCreate).conditionalDelete(ConditionalDeleteStatus.MULTIPLE).conditionalRead(ConditionalReadStatus.FULL_SUPPORT).searchParam(conformanceSearchParams).build();
 
             resources.add(cr);
         }
@@ -266,25 +258,14 @@ public class Capabilities extends FHIRResource {
             log.log(Level.WARNING, "Unexpected error while reading server transaction mode setting", t);
         }
 
-        CapabilityStatement.Rest.Security.Builder securityBuilder = CapabilityStatement.Rest.Security.builder()
-                .cors(com.ibm.fhir.model.type.Boolean.of(fhirConfig.getBooleanProperty(FHIRConfiguration.PROPERTY_SECURITY_CORS, true)));
-
+        CapabilityStatement.Rest.Security.Builder securityBuilder =
+                CapabilityStatement.Rest.Security.builder().cors(com.ibm.fhir.model.type.Boolean.of(fhirConfig.getBooleanProperty(FHIRConfiguration.PROPERTY_SECURITY_CORS, true)));
 
         if (fhirConfig.getBooleanProperty(FHIRConfiguration.PROPERTY_SECURITY_BASIC_ENABLED, false)) {
-            securityBuilder.service(CodeableConcept.builder()
-                .coding(Coding.builder()
-                    .code(Code.of("Basic"))
-                    .system(Uri.of("http://terminology.hl7.org/CodeSystem/restful-security-service"))
-                    .build())
-                .build());
+            securityBuilder.service(CodeableConcept.builder().coding(Coding.builder().code(Code.of("Basic")).system(Uri.of("http://terminology.hl7.org/CodeSystem/restful-security-service")).build()).build());
         }
         if (fhirConfig.getBooleanProperty(FHIRConfiguration.PROPERTY_SECURITY_CERT_ENABLED, false)) {
-            securityBuilder.service(CodeableConcept.builder()
-                .coding(Coding.builder()
-                    .code(Code.of("Certificates"))
-                    .system(Uri.of("http://terminology.hl7.org/CodeSystem/restful-security-service"))
-                    .build())
-                .build());
+            securityBuilder.service(CodeableConcept.builder().coding(Coding.builder().code(Code.of("Certificates")).system(Uri.of("http://terminology.hl7.org/CodeSystem/restful-security-service")).build()).build());
         }
 
         if (fhirConfig.getBooleanProperty(FHIRConfiguration.PROPERTY_SECURITY_OAUTH_ENABLED, false)) {
@@ -315,25 +296,13 @@ public class Capabilities extends FHIRResource {
             String revokeURL = revokeURLTemplate.replaceAll("<host>", actualHost);
 
             Boolean smartEnabled = fhirConfig.getBooleanProperty(FHIRConfiguration.PROPERTY_SECURITY_OAUTH_ENABLED, false);
-            securityBuilder.service(CodeableConcept.builder()
-                    .coding(Coding.builder()
-                        .code(Code.of(smartEnabled ? "SMART-on-FHIR" : "OAuth"))
-                        .system(Uri.of("http://terminology.hl7.org/CodeSystem/restful-security-service"))
-                        .build())
-                    .text(smartEnabled ? string("OAuth") : string("OAuth2 using SMART-on-FHIR profile (see http://docs.smarthealthit.org)"))
-                    .build())
-                .extension(buildOAuthURIsExtension(authURL, tokenURL, regURL, manageURL, introspectURL, revokeURL));
+            securityBuilder.service(CodeableConcept.builder().coding(Coding.builder().code(Code.of(smartEnabled ? "SMART-on-FHIR"
+                    : "OAuth")).system(Uri.of("http://terminology.hl7.org/CodeSystem/restful-security-service")).build()).text(smartEnabled ? string("OAuth")
+                            : string("OAuth2 using SMART-on-FHIR profile (see http://docs.smarthealthit.org)")).build()).extension(buildOAuthURIsExtension(authURL, tokenURL, regURL, manageURL, introspectURL, revokeURL));
         }
 
-        CapabilityStatement.Rest rest = CapabilityStatement.Rest.builder()
-                .mode(RestfulCapabilityMode.SERVER)
-                .security(securityBuilder.build())
-                .resource(addSupportedProfilesToResources(resources))
-                .interaction(CapabilityStatement.Rest.Interaction.builder()
-                    .code(transactionMode)
-                    .build())
-                .operation(mapOperationDefinitionsToRestOperations(systemOps))
-                .build();
+        CapabilityStatement.Rest rest =
+                CapabilityStatement.Rest.builder().mode(RestfulCapabilityMode.SERVER).security(securityBuilder.build()).resource(addSupportedProfilesToResources(resources)).interaction(CapabilityStatement.Rest.Interaction.builder().code(transactionMode).build()).operation(mapOperationDefinitionsToRestOperations(systemOps)).build();
 
         FHIRBuildIdentifier buildInfo = new FHIRBuildIdentifier();
         String buildDescription = FHIR_SERVER_NAME + " version " + buildInfo.getBuildVersion()
@@ -347,29 +316,12 @@ public class Capabilities extends FHIRResource {
         format.add(Code.of(FHIRMediaType.APPLICATION_XML));
         format.add(Code.of(FHIRMediaType.APPLICATION_FHIR_XML));
 
+        // TODO: Remove this
+        buildInstantiates();
+
         // Finally, create the CapabilityStatement resource itself.
-        CapabilityStatement conformance = CapabilityStatement.builder()
-                .status(PublicationStatus.ACTIVE)
-                .date(DateTime.now(ZoneOffset.UTC))
-                .kind(CapabilityStatementKind.CAPABILITY)
-                .fhirVersion(FHIRVersion.VERSION_4_0_1)
-                .format(format)
-                .patchFormat(Code.of(FHIRMediaType.APPLICATION_JSON_PATCH),
-                             Code.of(FHIRMediaType.APPLICATION_FHIR_JSON),
-                             Code.of(FHIRMediaType.APPLICATION_FHIR_XML))
-                .version(string(buildInfo.getBuildVersion()))
-                .name(string(FHIR_SERVER_NAME))
-                .description(Markdown.of(buildDescription))
-                .copyright(Markdown.of(FHIR_COPYRIGHT))
-                .publisher(string("IBM Corporation"))
-                .software(CapabilityStatement.Software.builder()
-                          .name(string(FHIR_SERVER_NAME))
-                          .version(string(buildInfo.getBuildVersion()))
-                          .id(buildInfo.getBuildId())
-                          .build())
-                .rest(rest)
-                .instantiates(Canonical.of("http://www.hl7.org/fhir/bulk-data/CapabilityStatement-bulk-data.html"))
-                .build();
+        CapabilityStatement conformance =
+                CapabilityStatement.builder().status(PublicationStatus.ACTIVE).date(DateTime.now(ZoneOffset.UTC)).kind(CapabilityStatementKind.CAPABILITY).fhirVersion(FHIRVersion.VERSION_4_0_1).format(format).patchFormat(Code.of(FHIRMediaType.APPLICATION_JSON_PATCH), Code.of(FHIRMediaType.APPLICATION_FHIR_JSON), Code.of(FHIRMediaType.APPLICATION_FHIR_XML)).version(string(buildInfo.getBuildVersion())).name(string(FHIR_SERVER_NAME)).description(Markdown.of(buildDescription)).copyright(Markdown.of(FHIR_COPYRIGHT)).publisher(string("IBM Corporation")).software(CapabilityStatement.Software.builder().name(string(FHIR_SERVER_NAME)).version(string(buildInfo.getBuildVersion())).id(buildInfo.getBuildId()).build()).rest(rest).instantiates(buildInstantiates()).build();
 
         try {
             conformance = addExtensionElements(conformance);
@@ -380,36 +332,62 @@ public class Capabilities extends FHIRResource {
         return conformance;
     }
 
+    /**
+     * Builds the list of canonicals for the instantiates field based on the capability statements (except FHIR core)
+     * found in the FHIR registry.
+     * 
+     * @return list of canonicals
+     */
+    private List<Canonical> buildInstantiates() {
+        Collection<CapabilityStatement> registeredCapabilities = FHIRRegistry.getInstance().getResources(CapabilityStatement.class);
+
+        List<Canonical> instantiates = new ArrayList<>();
+        for (CapabilityStatement registeredCapability : registeredCapabilities) {
+            if (registeredCapability != null && registeredCapability.getUrl() != null) {
+                String url = registeredCapability.getUrl().getValue();
+                if (url != null && !BASE_CAPABILITY_URL.equals(url) && !BASE_2_CAPABILITY_URL.equals(url)) {
+                    String canonicalValue = url;
+                    if (registeredCapability.getVersion() != null && registeredCapability.getVersion().getValue() != null) {
+                        canonicalValue = canonicalValue + "|" + registeredCapability.getVersion().getValue();
+                    }
+                    instantiates.add(Canonical.builder().value(canonicalValue).build());
+                }
+            }
+        }
+
+        return instantiates;
+    }
+
     private Extension buildOAuthURIsExtension(String authURL, String tokenURL, String regURL, String manageURL, String introspectURL, String revokeURL) {
-         Extension.Builder builder = Extension.builder().url("http://fhir-registry.smarthealthit.org/StructureDefinition/oauth-uris");
+        Extension.Builder builder = Extension.builder().url("http://fhir-registry.smarthealthit.org/StructureDefinition/oauth-uris");
 
-         builder.extension(Extension.builder().url("authorize").value(Uri.of(authURL)).build());
-         builder.extension(Extension.builder().url("token").value(Uri.of(tokenURL)).build());
+        builder.extension(Extension.builder().url("authorize").value(Uri.of(authURL)).build());
+        builder.extension(Extension.builder().url("token").value(Uri.of(tokenURL)).build());
 
-         if (regURL != null && !regURL.isEmpty()) {
-             builder.extension(Extension.builder().url("register").value(Uri.of(regURL)).build());
-         }
-         if (manageURL != null && !manageURL.isEmpty()) {
-             builder.extension(Extension.builder().url("register").value(Uri.of(manageURL)).build());
-         }
-         if (introspectURL != null && !introspectURL.isEmpty()) {
-             builder.extension(Extension.builder().url("register").value(Uri.of(introspectURL)).build());
-         }
-         if (revokeURL != null && !revokeURL.isEmpty()) {
-             builder.extension(Extension.builder().url("register").value(Uri.of(revokeURL)).build());
-         }
+        if (regURL != null && !regURL.isEmpty()) {
+            builder.extension(Extension.builder().url("register").value(Uri.of(regURL)).build());
+        }
+        if (manageURL != null && !manageURL.isEmpty()) {
+            builder.extension(Extension.builder().url("register").value(Uri.of(manageURL)).build());
+        }
+        if (introspectURL != null && !introspectURL.isEmpty()) {
+            builder.extension(Extension.builder().url("register").value(Uri.of(introspectURL)).build());
+        }
+        if (revokeURL != null && !revokeURL.isEmpty()) {
+            builder.extension(Extension.builder().url("register").value(Uri.of(revokeURL)).build());
+        }
 
-         return builder.build();
+        return builder.build();
     }
 
-    private List<Rest.Resource> addSupportedProfilesToResources(List<Rest.Resource> resources){
-        Map<String,Set<Canonical>> resourceProfiles = FHIRRegistry.getInstance().getProfiles();
-        return resources.stream().map(r -> processResource(r,resourceProfiles)).collect(Collectors.toList());
+    private List<Rest.Resource> addSupportedProfilesToResources(List<Rest.Resource> resources) {
+        Map<String, Set<Canonical>> resourceProfiles = FHIRRegistry.getInstance().getProfiles();
+        return resources.stream().map(r -> processResource(r, resourceProfiles)).collect(Collectors.toList());
     }
 
-    private Rest.Resource processResource(Rest.Resource resource, Map<String,Set<Canonical>> resourceProfiles){
+    private Rest.Resource processResource(Rest.Resource resource, Map<String, Set<Canonical>> resourceProfiles) {
         Set<Canonical> supportedProfiles = resourceProfiles.get(resource.getType().getValue());
-        if(supportedProfiles != null) {
+        if (supportedProfiles != null) {
             return resource.toBuilder().supportedProfile(new ArrayList<>(supportedProfiles)).build();
         } else {
             return resource;
@@ -429,11 +407,8 @@ public class Capabilities extends FHIRResource {
                 throw new IllegalStateException("Operation " + opDef.getCode().getValue() + " has no url");
             }
 
-            ops.add(Rest.Resource.Operation.builder()
-                    .name(opDef.getCode())
-                    .definition(Canonical.of(opDef.getUrl().getValue(), opDef.getVersion() == null ? null : opDef.getVersion().getValue()))
-                    .documentation(opDef.getDescription())
-                    .build());
+            ops.add(Rest.Resource.Operation.builder().name(opDef.getCode()).definition(Canonical.of(opDef.getUrl().getValue(), opDef.getVersion() == null ? null
+                    : opDef.getVersion().getValue())).documentation(opDef.getDescription()).build());
         }
 
         return ops;
@@ -442,28 +417,20 @@ public class Capabilities extends FHIRResource {
     private CapabilityStatement addExtensionElements(CapabilityStatement capabilityStatement)
         throws Exception {
         List<Extension> extentions = new ArrayList<Extension>();
-        Extension extension = Extension.builder()
-                .url(EXTENSION_URL + "/defaultTenantId")
-                .value(string(fhirConfig.getStringProperty(FHIRConfiguration.PROPERTY_DEFAULT_TENANT_ID, FHIRConfiguration.DEFAULT_TENANT_ID)))
-                .build();
+        Extension extension = Extension.builder().url(EXTENSION_URL
+                + "/defaultTenantId").value(string(fhirConfig.getStringProperty(FHIRConfiguration.PROPERTY_DEFAULT_TENANT_ID, FHIRConfiguration.DEFAULT_TENANT_ID))).build();
         extentions.add(extension);
 
-        extension = Extension.builder()
-                .url(EXTENSION_URL + "/websocketNotificationsEnabled")
-                .value(com.ibm.fhir.model.type.Boolean.of(fhirConfig.getBooleanProperty(FHIRConfiguration.PROPERTY_WEBSOCKET_ENABLED, Boolean.FALSE)))
-                .build();
+        extension = Extension.builder().url(EXTENSION_URL
+                + "/websocketNotificationsEnabled").value(com.ibm.fhir.model.type.Boolean.of(fhirConfig.getBooleanProperty(FHIRConfiguration.PROPERTY_WEBSOCKET_ENABLED, Boolean.FALSE))).build();
         extentions.add(extension);
 
-        extension = Extension.builder()
-                .url(EXTENSION_URL + "/kafkaNotificationsEnabled")
-                .value(com.ibm.fhir.model.type.Boolean.of(fhirConfig.getBooleanProperty(FHIRConfiguration.PROPERTY_KAFKA_ENABLED, Boolean.FALSE)))
-                .build();
+        extension = Extension.builder().url(EXTENSION_URL
+                + "/kafkaNotificationsEnabled").value(com.ibm.fhir.model.type.Boolean.of(fhirConfig.getBooleanProperty(FHIRConfiguration.PROPERTY_KAFKA_ENABLED, Boolean.FALSE))).build();
         extentions.add(extension);
 
-        extension = Extension.builder()
-                .url(EXTENSION_URL + "/natsNotificationsEnabled")
-                .value(com.ibm.fhir.model.type.Boolean.of(fhirConfig.getBooleanProperty(FHIRConfiguration.PROPERTY_NATS_ENABLED, Boolean.FALSE)))
-                .build();
+        extension = Extension.builder().url(EXTENSION_URL
+                + "/natsNotificationsEnabled").value(com.ibm.fhir.model.type.Boolean.of(fhirConfig.getBooleanProperty(FHIRConfiguration.PROPERTY_NATS_ENABLED, Boolean.FALSE))).build();
         extentions.add(extension);
 
         String notificationResourceTypes = getNotificationResourceTypes();
@@ -471,10 +438,7 @@ public class Capabilities extends FHIRResource {
             notificationResourceTypes = "<not specified - all resource types>";
         }
 
-        extension = Extension.builder()
-                .url(EXTENSION_URL + "/notificationResourceTypes")
-                .value(string(notificationResourceTypes))
-                .build();
+        extension = Extension.builder().url(EXTENSION_URL + "/notificationResourceTypes").value(string(notificationResourceTypes)).build();
         extentions.add(extension);
 
         String auditLogServiceName =
@@ -487,26 +451,17 @@ public class Capabilities extends FHIRResource {
             auditLogServiceName = auditLogServiceName.substring(lastDelimeter + 1);
         }
 
-        extension = Extension.builder()
-                .url(EXTENSION_URL + "/auditLogServiceName")
-                .value(string(auditLogServiceName))
-                .build();
+        extension = Extension.builder().url(EXTENSION_URL + "/auditLogServiceName").value(string(auditLogServiceName)).build();
         extentions.add(extension);
 
         PropertyGroup auditLogProperties =
                 fhirConfig.getPropertyGroup(FHIRConfiguration.PROPERTY_AUDIT_SERVICE_PROPERTIES);
         String auditLogPropertiesString =
                 auditLogProperties != null ? auditLogProperties.toString() : "<not specified>";
-        extension = Extension.builder()
-                .url(EXTENSION_URL + "/auditLogProperties")
-                .value(string(auditLogPropertiesString))
-                .build();
+        extension = Extension.builder().url(EXTENSION_URL + "/auditLogProperties").value(string(auditLogPropertiesString)).build();
         extentions.add(extension);
 
-        extension = Extension.builder()
-                .url(EXTENSION_URL + "/persistenceType")
-                .value(string(getPersistenceImpl().getClass().getSimpleName()))
-                .build();
+        extension = Extension.builder().url(EXTENSION_URL + "/persistenceType").value(string(getPersistenceImpl().getClass().getSimpleName())).build();
         extentions.add(extension);
 
         return capabilityStatement.toBuilder().extension(extentions).build();
